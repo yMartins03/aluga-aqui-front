@@ -47,7 +47,7 @@ export function MenuLateral() {
           {/* Imóveis Section */}
           <div className="pt-4">
             <h3 className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              🏠 Gestão de Imóveis
+              �️ Gestão de Imóveis
             </h3>
             
             <Link to="/admin/imoveis" className="flex items-center gap-3 px-4 py-3 text-gray-300 hover:text-white hover:bg-emerald-700/30 rounded-xl transition-all duration-200 group">
