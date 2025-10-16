@@ -84,7 +84,17 @@ export default function AdminImoveis() {
     }
 
     try {
-      console.log('Tentando atualizar imóvel:', { id, titulo: novoTitulo, aluguelMensal: precoNumerico });
+      const dadosEnvio = {
+        titulo: novoTitulo.trim(),
+        aluguelMensal: precoNumerico
+      };
+      
+      console.log('🔄 Tentando atualizar imóvel:', { 
+        id, 
+        url: `${apiUrl}/imoveis/${id}`,
+        dados: dadosEnvio,
+        token: admin.token ? 'Presente' : 'Ausente'
+      });
       
       // O backend usa PUT para edição
       const response = await fetch(`${apiUrl}/imoveis/${id}`, {
@@ -93,15 +103,13 @@ export default function AdminImoveis() {
           "Content-type": "application/json",
           Authorization: `Bearer ${admin.token}`
         },
-        body: JSON.stringify({
-          titulo: novoTitulo.trim(),
-          aluguelMensal: precoNumerico
-        })
+        body: JSON.stringify(dadosEnvio)
       });
 
-      console.log('Resposta do servidor - Status:', response.status);
+      console.log('📡 Resposta do servidor - Status:', response.status, response.statusText);
       
       if (response.ok) {
+        console.log('✅ Imóvel atualizado com sucesso');
         // Recarregar a lista de imóveis para garantir dados atualizados
         const responseImoveis = await fetch(`${apiUrl}/imoveis`);
         const dadosAtualizados = await responseImoveis.json();
@@ -109,23 +117,48 @@ export default function AdminImoveis() {
         toast.success("Imóvel atualizado com sucesso!");
       } else {
         // Tentar ler a resposta de erro
-        let errorMessage = `Erro ${response.status}`;
+        let errorMessage = `Erro HTTP ${response.status}`;
+        let responseData: any = null;
+        
         try {
-          const responseData = await response.json();
-          console.error('Erro na resposta:', response.status, responseData);
+          const responseText = await response.text();
+          console.log('📄 Resposta bruta do servidor:', responseText);
           
-          if (responseData.erro) {
-            errorMessage = responseData.erro;
-          } else if (responseData.message) {
-            errorMessage = responseData.message;
-          } else if (responseData.detalhes && Array.isArray(responseData.detalhes)) {
-            errorMessage = responseData.detalhes.map((d: any) => d.message).join(', ');
+          if (responseText) {
+            try {
+              responseData = JSON.parse(responseText);
+              console.log('📋 Dados de erro parseados:', responseData);
+            } catch (parseError) {
+              console.error('❌ Erro ao fazer parse do JSON:', parseError);
+              errorMessage = responseText || response.statusText;
+            }
           }
+          
+          if (responseData) {
+            if (typeof responseData.erro === 'string') {
+              errorMessage = responseData.erro;
+            } else if (typeof responseData.message === 'string') {
+              errorMessage = responseData.message;
+            } else if (responseData.detalhes && Array.isArray(responseData.detalhes)) {
+              const detalhes = responseData.detalhes.map((d: any) => {
+                if (typeof d === 'string') return d;
+                if (d.message) return d.message;
+                return JSON.stringify(d);
+              }).join(', ');
+              errorMessage = `Erros de validação: ${detalhes}`;
+            } else if (responseData.erro) {
+              errorMessage = `Erro do servidor: ${JSON.stringify(responseData.erro)}`;
+            } else {
+              errorMessage = `Resposta inesperada: ${JSON.stringify(responseData)}`;
+            }
+          }
+          
         } catch (e) {
-          console.error('Erro ao ler resposta JSON:', e);
-          errorMessage = response.statusText || 'Erro desconhecido';
+          console.error('❌ Erro crítico ao processar resposta:', e);
+          errorMessage = `Erro de comunicação: ${response.status} ${response.statusText}`;
         }
         
+        console.error('💥 Erro final:', errorMessage);
         toast.error(`Erro ao atualizar imóvel: ${errorMessage}`);
       }
     } catch (error) {
