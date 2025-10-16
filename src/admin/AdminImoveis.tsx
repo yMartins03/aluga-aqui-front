@@ -21,8 +21,8 @@ export default function AdminImoveis() {
   }, [])
 
   async function excluirImovel(id: number, titulo: string) {
-    if (!admin || admin.nivel < 2) {
-      toast.error("Você não tem permissão para excluir imóveis");
+    if (!admin) {
+      toast.error("Você precisa estar logado como admin");
       return;
     }
 
@@ -50,11 +50,61 @@ export default function AdminImoveis() {
     }
   }
 
-  function editarImovel(id: number) {
-    // Por enquanto, vamos usar um alert. Depois pode implementar modal ou navegação
-    toast.info(`Funcionalidade de edição será implementada para o imóvel ID: ${id}`);
-    // TODO: Implementar navegação para tela de edição ou modal
-    // navigate(`/admin/imoveis/editar/${id}`);
+  async function editarImovel(id: number) {
+    if (!admin) {
+      toast.error("Você precisa estar logado como admin");
+      return;
+    }
+
+    const imovel = imoveis.find(i => i.id === id);
+    if (!imovel) {
+      toast.error("Imóvel não encontrado");
+      return;
+    }
+
+    // Edição simples usando prompts
+    const novoTitulo = prompt("Novo título do imóvel:", imovel.titulo);
+    if (novoTitulo === null) return; // Usuário cancelou
+
+    const novoPreco = prompt("Novo preço de aluguel (apenas números):", imovel.aluguelMensal);
+    if (novoPreco === null) return; // Usuário cancelou
+
+    // Validar se o preço é um número válido
+    const precoNumerico = parseFloat(novoPreco);
+    if (isNaN(precoNumerico) || precoNumerico <= 0) {
+      toast.error("Preço inválido. Digite apenas números.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${apiUrl}/imoveis/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-type": "application/json",
+          Authorization: `Bearer ${admin.token}`
+        },
+        body: JSON.stringify({
+          titulo: novoTitulo,
+          aluguelMensal: precoNumerico.toString()
+        })
+      });
+
+      if (response.status === 200) {
+        // Atualizar o estado local
+        const imoveisAtualizados = imoveis.map(i => 
+          i.id === id 
+            ? { ...i, titulo: novoTitulo, aluguelMensal: precoNumerico.toString() }
+            : i
+        );
+        setImoveis(imoveisAtualizados);
+        toast.success("Imóvel atualizado com sucesso!");
+      } else {
+        toast.error("Erro ao atualizar imóvel");
+      }
+    } catch (error) {
+      console.error("Erro ao editar imóvel:", error);
+      toast.error("Erro de conexão ao editar imóvel");
+    }
   }
 
   return (
