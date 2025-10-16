@@ -68,24 +68,27 @@ export default function AdminImoveis() {
 
     // Edição simples usando prompts
     const novoTitulo = prompt("Novo título do imóvel:", imovel.titulo);
-    if (novoTitulo === null) return; // Usuário cancelou
+    if (novoTitulo === null || novoTitulo.trim() === "") {
+      toast.error("Título não pode estar vazio");
+      return;
+    }
 
     const novoPreco = prompt("Novo preço de aluguel (apenas números):", imovel.aluguelMensal);
     if (novoPreco === null) return; // Usuário cancelou
 
     // Validar se o preço é um número válido
-    const precoNumerico = parseFloat(novoPreco);
+    const precoNumerico = parseFloat(novoPreco.replace(',', '.'));
     if (isNaN(precoNumerico) || precoNumerico <= 0) {
-      toast.error("Preço inválido. Digite apenas números.");
+      toast.error("Preço inválido. Digite apenas números válidos.");
       return;
     }
 
     try {
       console.log('Tentando atualizar imóvel:', { id, titulo: novoTitulo, aluguelMensal: precoNumerico });
       
-      // Tentar primeiro com PATCH, depois com PUT se falhar
-      let response = await fetch(`${apiUrl}/imoveis/${id}`, {
-        method: "PATCH",
+      // O backend usa PUT para edição
+      const response = await fetch(`${apiUrl}/imoveis/${id}`, {
+        method: "PUT",
         headers: {
           "Content-type": "application/json",
           Authorization: `Bearer ${admin.token}`
@@ -96,26 +99,8 @@ export default function AdminImoveis() {
         })
       });
 
-      // Se PATCH não funcionar (405), tentar PUT
-      if (response.status === 405) {
-        console.log('PATCH não suportado, tentando PUT...');
-        response = await fetch(`${apiUrl}/imoveis/${id}`, {
-          method: "PUT",
-          headers: {
-            "Content-type": "application/json",
-            Authorization: `Bearer ${admin.token}`
-          },
-          body: JSON.stringify({
-            ...imovel, // Enviar todos os dados do imóvel
-            titulo: novoTitulo.trim(),
-            aluguelMensal: precoNumerico
-          })
-        });
-      }
-
-      const responseData = await response.json();
-      console.log('Resposta do servidor:', responseData);
-
+      console.log('Resposta do servidor - Status:', response.status);
+      
       if (response.ok) {
         // Recarregar a lista de imóveis para garantir dados atualizados
         const responseImoveis = await fetch(`${apiUrl}/imoveis`);
@@ -123,8 +108,25 @@ export default function AdminImoveis() {
         setImoveis(dadosAtualizados);
         toast.success("Imóvel atualizado com sucesso!");
       } else {
-        console.error('Erro na resposta:', response.status, responseData);
-        toast.error(`Erro ao atualizar imóvel: ${responseData.message || response.statusText || 'Erro desconhecido'}`);
+        // Tentar ler a resposta de erro
+        let errorMessage = `Erro ${response.status}`;
+        try {
+          const responseData = await response.json();
+          console.error('Erro na resposta:', response.status, responseData);
+          
+          if (responseData.erro) {
+            errorMessage = responseData.erro;
+          } else if (responseData.message) {
+            errorMessage = responseData.message;
+          } else if (responseData.detalhes && Array.isArray(responseData.detalhes)) {
+            errorMessage = responseData.detalhes.map((d: any) => d.message).join(', ');
+          }
+        } catch (e) {
+          console.error('Erro ao ler resposta JSON:', e);
+          errorMessage = response.statusText || 'Erro desconhecido';
+        }
+        
+        toast.error(`Erro ao atualizar imóvel: ${errorMessage}`);
       }
     } catch (error) {
       console.error("Erro ao editar imóvel:", error);
