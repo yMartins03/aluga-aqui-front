@@ -28,6 +28,8 @@ export default function AdminImoveis() {
 
     if (confirm(`Confirma a exclusão do imóvel: ${titulo}?`)) {
       try {
+        console.log('Tentando excluir imóvel:', { id, titulo });
+        
         const response = await fetch(`${apiUrl}/imoveis/${id}`, {
           method: "DELETE",
           headers: {
@@ -36,12 +38,14 @@ export default function AdminImoveis() {
           },
         });
 
-        if (response.status === 200) {
+        if (response.ok) {
           const imoveisAtualizados = imoveis.filter(x => x.id !== id);
           setImoveis(imoveisAtualizados);
           toast.success("Imóvel excluído com sucesso");
         } else {
-          toast.error("Erro... Imóvel não foi excluído");
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Erro ao excluir:', response.status, errorData);
+          toast.error(`Erro ao excluir imóvel: ${errorData.message || 'Erro desconhecido'}`);
         }
       } catch (error) {
         console.error("Erro ao excluir imóvel:", error);
@@ -77,29 +81,50 @@ export default function AdminImoveis() {
     }
 
     try {
-      const response = await fetch(`${apiUrl}/imoveis/${id}`, {
-        method: "PUT",
+      console.log('Tentando atualizar imóvel:', { id, titulo: novoTitulo, aluguelMensal: precoNumerico });
+      
+      // Tentar primeiro com PATCH, depois com PUT se falhar
+      let response = await fetch(`${apiUrl}/imoveis/${id}`, {
+        method: "PATCH",
         headers: {
           "Content-type": "application/json",
           Authorization: `Bearer ${admin.token}`
         },
         body: JSON.stringify({
-          titulo: novoTitulo,
-          aluguelMensal: precoNumerico.toString()
+          titulo: novoTitulo.trim(),
+          aluguelMensal: precoNumerico
         })
       });
 
-      if (response.status === 200) {
-        // Atualizar o estado local
-        const imoveisAtualizados = imoveis.map(i => 
-          i.id === id 
-            ? { ...i, titulo: novoTitulo, aluguelMensal: precoNumerico.toString() }
-            : i
-        );
-        setImoveis(imoveisAtualizados);
+      // Se PATCH não funcionar (405), tentar PUT
+      if (response.status === 405) {
+        console.log('PATCH não suportado, tentando PUT...');
+        response = await fetch(`${apiUrl}/imoveis/${id}`, {
+          method: "PUT",
+          headers: {
+            "Content-type": "application/json",
+            Authorization: `Bearer ${admin.token}`
+          },
+          body: JSON.stringify({
+            ...imovel, // Enviar todos os dados do imóvel
+            titulo: novoTitulo.trim(),
+            aluguelMensal: precoNumerico
+          })
+        });
+      }
+
+      const responseData = await response.json();
+      console.log('Resposta do servidor:', responseData);
+
+      if (response.ok) {
+        // Recarregar a lista de imóveis para garantir dados atualizados
+        const responseImoveis = await fetch(`${apiUrl}/imoveis`);
+        const dadosAtualizados = await responseImoveis.json();
+        setImoveis(dadosAtualizados);
         toast.success("Imóvel atualizado com sucesso!");
       } else {
-        toast.error("Erro ao atualizar imóvel");
+        console.error('Erro na resposta:', response.status, responseData);
+        toast.error(`Erro ao atualizar imóvel: ${responseData.message || response.statusText || 'Erro desconhecido'}`);
       }
     } catch (error) {
       console.error("Erro ao editar imóvel:", error);
