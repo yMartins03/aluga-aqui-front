@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react"
 
-// import ItemImovel from './components/ItemImovel' // Não usado mais - usando cards inline
 import type { ImovelType } from "../utils/ImovelType"
 import { Link } from "react-router-dom"
+import { useAdminStore } from "./context/AdminContext"
+import { toast } from "sonner"
 
 const apiUrl = import.meta.env.VITE_API_URL
 
 export default function AdminImoveis() {
   const [imoveis, setImoveis] = useState<ImovelType[]>([])
+  const { admin } = useAdminStore()
 
   useEffect(() => {
     async function getImoveis() {
@@ -18,7 +20,42 @@ export default function AdminImoveis() {
     getImoveis()
   }, [])
 
-  // Agora usando cards inline no JSX ao invés de componente separado
+  async function excluirImovel(id: number, titulo: string) {
+    if (!admin || admin.nivel < 2) {
+      toast.error("Você não tem permissão para excluir imóveis");
+      return;
+    }
+
+    if (confirm(`Confirma a exclusão do imóvel: ${titulo}?`)) {
+      try {
+        const response = await fetch(`${apiUrl}/imoveis/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Content-type": "application/json",
+            Authorization: `Bearer ${admin.token}`
+          },
+        });
+
+        if (response.status === 200) {
+          const imoveisAtualizados = imoveis.filter(x => x.id !== id);
+          setImoveis(imoveisAtualizados);
+          toast.success("Imóvel excluído com sucesso");
+        } else {
+          toast.error("Erro... Imóvel não foi excluído");
+        }
+      } catch (error) {
+        console.error("Erro ao excluir imóvel:", error);
+        toast.error("Erro de conexão ao excluir imóvel");
+      }
+    }
+  }
+
+  function editarImovel(id: number) {
+    // Por enquanto, vamos usar um alert. Depois pode implementar modal ou navegação
+    toast.info(`Funcionalidade de edição será implementada para o imóvel ID: ${id}`);
+    // TODO: Implementar navegação para tela de edição ou modal
+    // navigate(`/admin/imoveis/editar/${id}`);
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-emerald-50 dark:from-gray-900 dark:to-emerald-900 p-6">
@@ -102,10 +139,16 @@ export default function AdminImoveis() {
 
               {/* Botões de ação */}
               <div className="flex gap-2">
-                <button className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                <button 
+                  onClick={() => editarImovel(imovel.id)}
+                  className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors duration-200"
+                >
                   ✏️ Editar
                 </button>
-                <button className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                <button 
+                  onClick={() => excluirImovel(imovel.id, imovel.titulo)}
+                  className="flex-1 px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200"
+                >
                   🗑️ Excluir
                 </button>
               </div>
